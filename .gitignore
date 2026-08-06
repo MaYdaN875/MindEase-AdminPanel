@@ -1,0 +1,33 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+/administraci_n_de_cat_logos
+/auditor_a_y_trazabilidad
+/clinical_integrity_systems
+/dashboard_operativo
+/expediente_del_psic_logo
+/gesti_n_de_usuarios
+/reportes_y_moderaci_n
+/solicitudes_de_psic_logos
