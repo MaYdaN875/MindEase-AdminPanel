@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PsychologistApplication } from './RequestsView';
+import type { ProfessionalDocument, VerificationStatusHistory } from '../services/adminService';
+import { getDocumentBlobUrl } from '../services/adminService';
 
 interface DossierViewProps {
   app: PsychologistApplication;
+  documents: ProfessionalDocument[];
+  statusHistory: VerificationStatusHistory[];
   onBack: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string, notes: string) => void;
   onRequestChanges: (id: string, notes: string) => void;
-  onAssignRevisor: (id: string, name: string) => void;
+  onAssignRevisor: (id: string) => void;
 }
 
 export const DossierView: React.FC<DossierViewProps> = ({
   app,
+  documents,
+  statusHistory,
   onBack,
   onApprove,
   onReject,
@@ -22,13 +28,18 @@ export const DossierView: React.FC<DossierViewProps> = ({
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [showChangesForm, setShowChangesForm] = useState(false);
   const [notes, setNotes] = useState('');
+  
+  // Document Viewer State
+  const [selectedDocUrl, setSelectedDocUrl] = useState<string | null>(null);
+  const [selectedDocName, setSelectedDocName] = useState<string | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(false);
 
   const handleApprove = () => {
     onApprove(app.id);
   };
 
   const handleAssign = () => {
-    onAssignRevisor(app.id, 'Dr. A. Sterling');
+    onAssignRevisor(app.id);
   };
 
   const handleRejectSubmit = (e: React.FormEvent) => {
@@ -48,6 +59,28 @@ export const DossierView: React.FC<DossierViewProps> = ({
       setShowChangesForm(false);
     }
   };
+
+  const handleSelectDocument = async (docId: string, filename: string) => {
+    setLoadingDoc(true);
+    setSelectedDocUrl(null);
+    setSelectedDocName(filename);
+    try {
+      const url = await getDocumentBlobUrl(docId, filename);
+      setSelectedDocUrl(url);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to securely download document from the backend.');
+    } finally {
+      setLoadingDoc(false);
+    }
+  };
+
+  // Auto-select first document on entering documentation tab
+  useEffect(() => {
+    if (activeTab === 'tab-docs' && documents.length > 0 && !selectedDocUrl) {
+      handleSelectDocument(documents[0].id, documents[0].originalFilename);
+    }
+  }, [activeTab, documents]);
 
   const tabs = [
     { id: 'tab-general', label: 'General Info' },
@@ -123,7 +156,7 @@ export const DossierView: React.FC<DossierViewProps> = ({
                 {app.specialty} • License ID: {app.licenseNumber || 'N/A'}
               </p>
               <p className="font-body-sm text-xs text-on-surface-variant mt-1.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px] text-outline">location_on</span> {app.state} (GMT+1)
+                <span className="material-symbols-outlined text-[16px] text-outline">location_on</span> {app.state}
               </p>
             </div>
             
@@ -176,10 +209,7 @@ export const DossierView: React.FC<DossierViewProps> = ({
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
                 <h3 className="font-headline-sm text-base font-bold text-primary mb-4">Professional Biography</h3>
                 <p className="font-body-md text-sm text-on-surface-variant leading-relaxed">
-                  {app.bio || `Dr. specialized in Cognitive Behavioral Therapy (CBT) for adults dealing with severe anxiety disorders and major depressive episodes. With over 10 years of clinical experience across both public hospital settings and private practice.`}
-                </p>
-                <p className="font-body-md text-sm text-on-surface-variant mt-4 leading-relaxed">
-                  Practitioner is fluent in Spanish and English. The therapeutic approach is highly structured, focusing on measurable outcomes, evidence-based interventions, and establishing a safe clinical environment for recovery.
+                  {app.bio || `Dr. specialized in Clinical Psychology focused on patient resilience and emotional management.`}
                 </p>
               </div>
 
@@ -188,7 +218,7 @@ export const DossierView: React.FC<DossierViewProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="p-3 bg-surface rounded border border-outline-variant/30">
                     <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider block font-semibold">Accepted Age Groups</span>
-                    <span className="font-body-md text-sm text-primary font-bold mt-1 block">Adults (18-64), Elders (65+)</span>
+                    <span className="font-body-md text-sm text-primary font-bold mt-1 block">Adults (18-64), Couples</span>
                   </div>
                   <div className="p-3 bg-surface rounded border border-outline-variant/30">
                     <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider block font-semibold">Languages</span>
@@ -216,13 +246,6 @@ export const DossierView: React.FC<DossierViewProps> = ({
                       <p className="font-data-mono text-sm text-primary font-bold">{app.phone || '+34 600 123 456'}</p>
                     </div>
                   </li>
-                  <li className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-outline mt-0.5">home_pin</span>
-                    <div>
-                      <p className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Clinic Address</p>
-                      <p className="font-body-md text-sm text-primary font-bold">Av. Constitución 485, Centro, CP 44100</p>
-                    </div>
-                  </li>
                 </ul>
               </div>
             </div>
@@ -236,13 +259,13 @@ export const DossierView: React.FC<DossierViewProps> = ({
               <div>
                 <h4 className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider mb-2 font-bold">Academic Background</h4>
                 <p className="font-body-md text-sm text-primary leading-relaxed bg-surface p-4 rounded border border-outline-variant/30">
-                  {app.academicBackground || `Ph.D. in Clinical Psychology - Universidad Complutense de Madrid (2012)\nMaster in Cognitive Behavioral Therapy (2014)`}
+                  {app.academicBackground || `No academic background provided.`}
                 </p>
               </div>
               <div>
                 <h4 className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider mb-2 font-bold">Clinical Experience</h4>
                 <p className="font-body-md text-sm text-primary leading-relaxed bg-surface p-4 rounded border border-outline-variant/30">
-                  {app.experience || `8+ years in Clinical Consultation. Head of anxiety disorders division in private clinic.\n4 years clinical residency program.`}
+                  {app.experience || `No experience description provided.`}
                 </p>
               </div>
             </div>
@@ -278,56 +301,75 @@ export const DossierView: React.FC<DossierViewProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Document Lists */}
               <div className="lg:col-span-4 space-y-3">
-                {[
-                  { name: 'Official ID (INE/Passport)', type: 'ID', file: 'ine_perez.pdf', size: '1.2 MB', status: 'Verified' },
-                  { name: 'Professional License (Cédula)', type: 'DEGREE', file: 'cedula_perez.png', size: '2.4 MB', status: 'Pending Review' },
-                  { name: 'University Diploma (Degree)', type: 'DEGREE', file: 'titulo_perez.pdf', size: '4.8 MB', status: 'Pending Review' },
-                  { name: 'Criminal Record Certification', type: 'COMPLIANCE', file: 'antecedentes_perez.pdf', size: '920 KB', status: 'Verified' },
-                ].map((doc, idx) => (
-                  <div key={idx} className="p-3 border border-outline-variant rounded-lg hover:bg-surface transition-colors cursor-pointer flex justify-between items-center bg-surface-container-low/30">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary">description</span>
-                      <div>
-                        <h4 className="font-body-sm text-xs font-bold text-primary">{doc.name}</h4>
-                        <p className="font-data-mono text-[10px] text-outline mt-0.5">{doc.file} • {doc.size}</p>
+                {documents && documents.length > 0 ? (
+                  documents.map((doc) => {
+                    const isActive = selectedDocName === doc.originalFilename;
+                    return (
+                      <div
+                        key={doc.id}
+                        onClick={() => handleSelectDocument(doc.id, doc.originalFilename)}
+                        className={`p-3 border rounded-lg hover:bg-surface transition-colors cursor-pointer flex justify-between items-center ${
+                          isActive
+                            ? 'border-secondary bg-secondary-container/10 font-semibold'
+                            : 'border-outline-variant bg-surface-container-low/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-primary">description</span>
+                          <div>
+                            <h4 className="font-body-sm text-xs font-bold text-primary">{doc.documentType}</h4>
+                            <p className="font-data-mono text-[10px] text-outline mt-0.5">
+                              {doc.originalFilename} • {(doc.fileSize / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          {doc.status === 'APPROVED' ? (
+                            <span className="text-secondary material-symbols-outlined text-lg fill">check_circle</span>
+                          ) : doc.status === 'REJECTED' ? (
+                            <span className="text-error material-symbols-outlined text-lg fill">cancel</span>
+                          ) : (
+                            <span className="text-[#b45309] material-symbols-outlined text-lg">hourglass_top</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      {doc.status === 'Verified' ? (
-                        <span className="text-secondary material-symbols-outlined text-lg fill">check_circle</span>
-                      ) : (
-                        <span className="text-[#b45309] material-symbols-outlined text-lg">hourglass_top</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })
+                ) : (
+                  <div className="text-xs text-on-surface-variant italic">No documents uploaded.</div>
+                )}
               </div>
 
-              {/* Mock PDF Document Viewer */}
+              {/* PDF/Image Document Viewer */}
               <div className="lg:col-span-8 border border-outline-variant/60 rounded-xl bg-surface p-4 flex flex-col items-center justify-center min-h-[350px] relative">
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <button className="p-1.5 bg-surface-container-lowest border border-outline-variant rounded hover:bg-surface-variant flex items-center justify-center shadow-sm">
-                    <span className="material-symbols-outlined text-sm">zoom_in</span>
-                  </button>
-                  <button className="p-1.5 bg-surface-container-lowest border border-outline-variant rounded hover:bg-surface-variant flex items-center justify-center shadow-sm">
-                    <span className="material-symbols-outlined text-sm">zoom_out</span>
-                  </button>
-                  <button className="p-1.5 bg-surface-container-lowest border border-outline-variant rounded hover:bg-surface-variant flex items-center justify-center shadow-sm">
-                    <span className="material-symbols-outlined text-sm">download</span>
-                  </button>
-                </div>
-                
-                {/* Visual Placeholder for Documents */}
-                <div className="text-center p-8 max-w-sm">
-                  <span className="material-symbols-outlined text-5xl text-outline mb-4">picture_as_pdf</span>
-                  <h4 className="font-body-md text-sm font-bold text-primary mb-2">cedula_perez.png</h4>
-                  <p className="text-xs text-on-surface-variant leading-relaxed">
-                    This file is securely hosted in MindEase Compliance storage bucket. Revisor has full read access.
-                  </p>
-                  <div className="mt-4 px-4 py-2 border border-dashed border-outline-variant rounded bg-surface-container-lowest/50 text-xs font-semibold font-data-mono inline-block">
-                    MD5: 5b4e311f9f257a419c8f
+                {selectedDocUrl ? (
+                  selectedDocName?.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={selectedDocUrl}
+                      title="Document Preview"
+                      className="w-full h-[400px] border-none rounded-lg bg-white shadow-sm"
+                    />
+                  ) : (
+                    <img
+                      src={selectedDocUrl}
+                      alt="Document Preview"
+                      className="max-w-full max-h-[400px] object-contain rounded-lg shadow-sm"
+                    />
+                  )
+                ) : loadingDoc ? (
+                  <div className="text-center">
+                    <span className="material-symbols-outlined text-3xl text-secondary animate-spin">sync</span>
+                    <p className="text-xs text-outline mt-2 font-semibold">Downloading file from secure clinical storage...</p>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-center p-8 max-w-sm">
+                    <span className="material-symbols-outlined text-5xl text-outline mb-4">picture_as_pdf</span>
+                    <h4 className="font-body-md text-sm font-bold text-primary mb-2">No Document Selected</h4>
+                    <p className="text-xs text-on-surface-variant leading-relaxed">
+                      Select a document from the left list to load and preview its validation credentials in the secure frame.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -351,7 +393,7 @@ export const DossierView: React.FC<DossierViewProps> = ({
                     <div key={idx} className="p-3 border border-outline-variant/30 bg-surface rounded text-center">
                       <span className="text-xs font-bold text-primary block">{day}</span>
                       <span className="text-[10px] text-secondary font-bold mt-1.5 block">09:00 - 18:00</span>
-                      <span className="text-[9px] text-outline mt-0.5 block">5 open slots</span>
+                      <span className="text-[9px] text-outline mt-0.5 block">Open slots available</span>
                     </div>
                   ))}
                 </div>
@@ -365,41 +407,33 @@ export const DossierView: React.FC<DossierViewProps> = ({
             <h3 className="font-headline-sm text-base font-bold text-primary mb-4">Administrative Action Logs</h3>
             <div className="space-y-4">
               <div className="relative pl-6 border-l-2 border-outline-variant/60 space-y-6 text-sm">
-                {/* Timeline Item 1 */}
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-secondary border-2 border-surface-container-lowest"></div>
-                  <div className="bg-surface p-3 rounded-lg border border-outline-variant/20">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-semibold text-primary">Application Created</span>
-                      <span className="font-data-mono text-[10px] text-outline">Oct 24, 2023 14:30 EST</span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant">Self-registration completed from psychological applicant dashboard.</p>
-                  </div>
-                </div>
-
-                {/* Timeline Item 2 */}
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-secondary border-2 border-surface-container-lowest"></div>
-                  <div className="bg-surface p-3 rounded-lg border border-outline-variant/20">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-semibold text-primary">Revisor Assigned ({app.revisor})</span>
-                      <span className="font-data-mono text-[10px] text-outline">Oct 24, 2023 15:00 EST</span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant">Assigned for academic background and identity check.</p>
-                  </div>
-                </div>
-
-                {/* Timeline Item 3 (Current status) */}
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-primary border-2 border-surface-container-lowest"></div>
-                  <div className="bg-surface p-3 rounded-lg border border-outline-variant/20">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-semibold text-primary">Current Verification Status: {app.status}</span>
-                      <span className="font-data-mono text-[10px] text-outline">Today</span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant">Ongoing audit. Current state is set to: <strong>{app.status}</strong></p>
-                  </div>
-                </div>
+                {statusHistory && statusHistory.length > 0 ? (
+                  statusHistory.map((hist) => {
+                    const histDate = new Date(hist.changedAt);
+                    const timestampStr = `${histDate.toLocaleDateString()} ${histDate.toLocaleTimeString()}`;
+                    return (
+                      <div key={hist.id} className="relative">
+                        <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-secondary border-2 border-surface-container-lowest"></div>
+                        <div className="bg-surface p-3 rounded-lg border border-outline-variant/20">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-semibold text-primary">
+                              Status Shift: {hist.fromStatus} ➜ {hist.toStatus}
+                            </span>
+                            <span className="font-data-mono text-[10px] text-outline">{timestampStr}</span>
+                          </div>
+                          <p className="text-xs text-on-surface-variant leading-relaxed">
+                            {hist.comment || 'Status updated during credential audit.'}
+                          </p>
+                          <span className="text-[9px] text-outline block mt-2 font-semibold">
+                            Changed by: {hist.changedBy.name} ({hist.changedBy.email})
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-xs text-on-surface-variant italic">No status changes logged.</div>
+                )}
               </div>
             </div>
           </div>
