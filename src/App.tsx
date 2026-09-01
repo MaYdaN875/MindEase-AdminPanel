@@ -19,9 +19,18 @@ import {
   requestApplicationChanges,
   rejectApplication,
   getAuditLogs,
+  getAdminUsers,
+  getSystemRoles,
+  updateUserRoles,
+  updateUserStatus,
   logoutAdmin
 } from './services/adminService';
-import type { VerificationRequest, BackendAuditLog } from './services/adminService';
+import type {
+  VerificationRequest,
+  BackendAuditLog,
+  AdminUserRecord,
+  RoleRecord
+} from './services/adminService';
 import './App.css';
 
 function App() {
@@ -33,6 +42,8 @@ function App() {
   const [applications, setApplications] = useState<PsychologistApplication[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [roles, setRoles] = useState<RoleRecord[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,11 +59,17 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const reqs = await getVerificationRequests();
-      const logs = await getAuditLogs();
+      const [reqs, logs, dbUsers, dbRoles] = await Promise.all([
+        getVerificationRequests(),
+        getAuditLogs(),
+        getAdminUsers(),
+        getSystemRoles(),
+      ]);
 
       setApplications(reqs.map(mapBackendToApplication));
       setAuditLogs(logs.map(mapBackendToAuditLog));
+      setUsers(dbUsers);
+      setRoles(dbRoles);
     } catch (err: any) {
       console.error(err);
       if (err.response?.status === 401) {
@@ -79,7 +96,7 @@ function App() {
   // Helper to map DB VerificationRequest to UI PsychologistApplication
   const mapBackendToApplication = (req: VerificationRequest): PsychologistApplication => {
     const prof = req.psychologist;
-    const user = prof.user;
+    const user = prof.user || { id: '', name: 'Unknown', email: '' };
     
     let displayStatus: PsychologistApplication['status'] = 'Pending';
     if (prof.status === 'VERIFICADO') displayStatus = 'Verified';
@@ -182,9 +199,7 @@ function App() {
     setError(null);
     try {
       await approveApplication(id);
-      // Refresh
       await fetchBackendData();
-      // If we are currently viewing the details, update the selected request details
       if (selectedRequest && selectedRequest.id === id) {
         const detail = await getVerificationRequestDetail(id);
         setSelectedRequest(detail);
@@ -251,6 +266,16 @@ function App() {
     }
   };
 
+  const handleUpdateRoles = async (userId: string, newRoles: string[]) => {
+    await updateUserRoles(userId, newRoles);
+    await fetchBackendData();
+  };
+
+  const handleUpdateStatus = async (userId: string, newStatus: string) => {
+    await updateUserStatus(userId, newStatus);
+    await fetchBackendData();
+  };
+
   const renderActiveView = () => {
     switch (currentView) {
       case 'dashboard':
@@ -272,7 +297,6 @@ function App() {
         );
       case 'dossier':
         if (selectedRequest) {
-          // Map dynamic application fields to the component
           const mappedApp = mapBackendToApplication(selectedRequest);
           return (
             <DossierView
@@ -294,8 +318,12 @@ function App() {
       case 'users':
         return (
           <UserManagementView
-            applications={applications}
+            users={users}
+            roles={roles}
+            onUpdateRoles={handleUpdateRoles}
+            onUpdateStatus={handleUpdateStatus}
             onOpenDossier={handleOpenDossier}
+            onRefresh={fetchBackendData}
           />
         );
       case 'moderation':

@@ -8,6 +8,37 @@ export interface User {
   phone?: string | null;
 }
 
+export interface RoleRecord {
+  id: string;
+  name: string;
+}
+
+export interface UserRoleRecord {
+  userId: string;
+  roleId: string;
+  role: RoleRecord;
+}
+
+export interface UserConsentRecord {
+  id: string;
+  userId: string;
+  consentType: string;
+  acceptedAt: string;
+}
+
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string | null;
+  status?: string;
+  createdAt: string;
+  updatedAt: string;
+  userRoles: UserRoleRecord[];
+  psychologistProfile?: PsychologistProfile | null;
+  consents?: UserConsentRecord[];
+}
+
 export interface Specialty {
   id: string;
   name: string;
@@ -62,9 +93,9 @@ export interface PsychologistProfile {
   languages?: string | null;
   location?: string | null;
   licenseNumber?: string | null;
-  status: string; // REGISTRO_INCOMPLETO, PENDIENTE_REVISION, EN_REVISION, REQUIERE_CAMBIOS, VERIFICADO, etc.
+  status: string; // REGISTRO_INCOMPLETO, PENDIENTE_REVISION, EN_REVISION, REQUIERE_CAMBIOS, VERIFICADO, SUSPENDIDO, etc.
   createdAt: string;
-  user: User;
+  user?: User;
   specialties: PsychologistSpecialty[];
   documents?: ProfessionalDocument[];
   statusHistory?: VerificationStatusHistory[];
@@ -160,4 +191,33 @@ export const getDocumentBlobUrl = async (documentId: string, filename?: string):
   }
   
   return URL.createObjectURL(blob);
+};
+
+// User & Role Management APIs
+export const getAdminUsers = async (params?: {
+  search?: string;
+  role?: string;
+  status?: string;
+}): Promise<AdminUserRecord[]> => {
+  const searchParams = new URLSearchParams();
+  if (params?.search) searchParams.append('search', params.search);
+  if (params?.role) searchParams.append('role', params.role);
+  if (params?.status) searchParams.append('status', params.status);
+  
+  const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+  const response = await api.get(`/admin/users${query}`);
+  return response.data.data.users;
+};
+
+export const getSystemRoles = async (): Promise<RoleRecord[]> => {
+  const response = await api.get('/admin/roles');
+  return response.data.data.roles;
+};
+
+export const updateUserRoles = async (userId: string, roles: string[]): Promise<void> => {
+  await api.put(`/admin/users/${userId}/roles`, { roles });
+};
+
+export const updateUserStatus = async (userId: string, status: string): Promise<void> => {
+  await api.put(`/admin/users/${userId}/status`, { status });
 };
