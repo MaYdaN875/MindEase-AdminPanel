@@ -221,3 +221,31 @@ export const updateUserRoles = async (userId: string, roles: string[]): Promise<
 export const updateUserStatus = async (userId: string, status: string): Promise<void> => {
   await api.put(`/admin/users/${userId}/status`, { status });
 };
+
+// Dynamic Specialties Management APIs
+export interface SpecialtyRecord {
+  id: string;
+  name: string;
+  _count?: {
+    psychologists: number;
+  };
+}
+
+export const getAdminSpecialties = async (): Promise<SpecialtyRecord[]> => {
+  const response = await api.get('/admin/specialties');
+  return response.data.data.specialties;
+};
+
+export const createAdminSpecialty = async (name: string): Promise<SpecialtyRecord> => {
+  const response = await api.post('/admin/specialties', { name });
+  return response.data.data.specialty;
+};
+
+export const updateAdminSpecialty = async (specialtyId: string, name: string): Promise<SpecialtyRecord> => {
+  const response = await api.put(`/admin/specialties/${specialtyId}`, { name });
+  return response.data.data.specialty;
+};
+
+export const deleteAdminSpecialty = async (specialtyId: string): Promise<void> => {
+  await api.delete(`/admin/specialties/${specialtyId}`);
+};
