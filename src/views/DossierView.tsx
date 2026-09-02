@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { PsychologistApplication } from './RequestsView';
 import type { ProfessionalDocument, VerificationStatusHistory } from '../services/adminService';
-import { getDocumentBlobUrl } from '../services/adminService';
+import { getDocumentBlobUrl, updateDocumentStatus } from '../services/adminService';
 
 interface DossierViewProps {
   app: PsychologistApplication;
@@ -29,10 +29,18 @@ export const DossierView: React.FC<DossierViewProps> = ({
   const [showChangesForm, setShowChangesForm] = useState(false);
   const [notes, setNotes] = useState('');
   
-  // Document Viewer State
+  // Document Viewer & Validation State
+  const [docList, setDocList] = useState<ProfessionalDocument[]>(documents);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedDocUrl, setSelectedDocUrl] = useState<string | null>(null);
   const [selectedDocName, setSelectedDocName] = useState<string | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(false);
+  const [docExpirationInput, setDocExpirationInput] = useState<string>('');
+  const [updatingDocStatus, setUpdatingDocStatus] = useState(false);
+
+  useEffect(() => {
+    setDocList(documents);
+  }, [documents]);
 
   const handleApprove = () => {
     onApprove(app.id);
@@ -61,9 +69,18 @@ export const DossierView: React.FC<DossierViewProps> = ({
   };
 
   const handleSelectDocument = async (docId: string, filename: string) => {
+    setSelectedDocId(docId);
     setLoadingDoc(true);
     setSelectedDocUrl(null);
     setSelectedDocName(filename);
+
+    const docObj = docList.find((d) => d.id === docId);
+    if (docObj?.expiresAt) {
+      setDocExpirationInput(docObj.expiresAt.substring(0, 10));
+    } else {
+      setDocExpirationInput('');
+    }
+
     try {
       const url = await getDocumentBlobUrl(docId, filename);
       setSelectedDocUrl(url);
@@ -75,12 +92,76 @@ export const DossierView: React.FC<DossierViewProps> = ({
     }
   };
 
+  const handleUpdateDocStatus = async (newStatus: 'PENDING' | 'APPROVED' | 'REJECTED') => {
+    if (!selectedDocId) return;
+    setUpdatingDocStatus(true);
+    try {
+      const updated = await updateDocumentStatus(
+        selectedDocId,
+        newStatus,
+        docExpirationInput ? new Date(docExpirationInput).toISOString() : null
+      );
+      setDocList((prev) =>
+        prev.map((d) => (d.id === selectedDocId ? { ...d, status: updated.status, expiresAt: updated.expiresAt } : d))
+      );
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update document status on backend.');
+    } finally {
+      setUpdatingDocStatus(false);
+    }
+  };
+
+  const handleSaveExpirationDate = async () => {
+    if (!selectedDocId) return;
+    const currentDoc = docList.find((d) => d.id === selectedDocId);
+    if (!currentDoc) return;
+
+    setUpdatingDocStatus(true);
+    try {
+      const updated = await updateDocumentStatus(
+        selectedDocId,
+        currentDoc.status,
+        docExpirationInput ? new Date(docExpirationInput).toISOString() : null
+      );
+      setDocList((prev) =>
+        prev.map((d) => (d.id === selectedDocId ? { ...d, expiresAt: updated.expiresAt } : d))
+      );
+      alert('Document expiration date saved successfully.');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save document expiration date.');
+    } finally {
+      setUpdatingDocStatus(false);
+    }
+  };
+
+  const handleClearExpirationDate = async () => {
+    if (!selectedDocId) return;
+    const currentDoc = docList.find((d) => d.id === selectedDocId);
+    if (!currentDoc) return;
+
+    setUpdatingDocStatus(true);
+    try {
+      const updated = await updateDocumentStatus(selectedDocId, currentDoc.status, null);
+      setDocExpirationInput('');
+      setDocList((prev) =>
+        prev.map((d) => (d.id === selectedDocId ? { ...d, expiresAt: updated.expiresAt } : d))
+      );
+    } catch (err) {
+      console.error(err);
+      alert('Failed to clear expiration date.');
+    } finally {
+      setUpdatingDocStatus(false);
+    }
+  };
+
   // Auto-select first document on entering documentation tab
   useEffect(() => {
-    if (activeTab === 'tab-docs' && documents.length > 0 && !selectedDocUrl) {
-      handleSelectDocument(documents[0].id, documents[0].originalFilename);
+    if (activeTab === 'tab-docs' && docList.length > 0 && !selectedDocId) {
+      handleSelectDocument(docList[0].id, docList[0].originalFilename);
     }
-  }, [activeTab, documents]);
+  }, [activeTab, docList, selectedDocId]);
 
   const tabs = [
     { id: 'tab-general', label: 'General Info' },
@@ -296,79 +377,234 @@ export const DossierView: React.FC<DossierViewProps> = ({
 
         {activeTab === 'tab-docs' && (
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm space-y-6">
-            <h3 className="font-headline-sm text-base font-bold text-primary mb-4">Secure Documentation</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-outline-variant/40 pb-3">
+              <div>
+                <h3 className="font-headline-sm text-base font-bold text-primary">
+                  Validación Forense y Acreditación Documental
+                </h3>
+                <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
+                  Revisa, aprueba o rechaza cada documento individualmente y define sus fechas de vigencia / caducidad.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-on-surface-variant font-data-mono">
+                  {docList.filter((d) => d.status === 'APPROVED').length} / {docList.length} Validados
+                </span>
+              </div>
+            </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Document Lists */}
               <div className="lg:col-span-4 space-y-3">
-                {documents && documents.length > 0 ? (
-                  documents.map((doc) => {
-                    const isActive = selectedDocName === doc.originalFilename;
+                {docList && docList.length > 0 ? (
+                  docList.map((doc) => {
+                    const isActive = selectedDocId === doc.id;
+                    const isExpired = doc.expiresAt && new Date(doc.expiresAt) < new Date();
                     return (
                       <div
                         key={doc.id}
                         onClick={() => handleSelectDocument(doc.id, doc.originalFilename)}
-                        className={`p-3 border rounded-lg hover:bg-surface transition-colors cursor-pointer flex justify-between items-center ${
+                        className={`p-3.5 border rounded-xl hover:bg-surface transition-all cursor-pointer flex justify-between items-center text-left ${
                           isActive
-                            ? 'border-secondary bg-secondary-container/10 font-semibold'
+                            ? 'border-secondary bg-secondary-container/10 shadow-xs'
                             : 'border-outline-variant bg-surface-container-low/30'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-primary">description</span>
-                          <div>
-                            <h4 className="font-body-sm text-xs font-bold text-primary">{doc.documentType}</h4>
-                            <p className="font-data-mono text-[10px] text-outline mt-0.5">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <span className={`material-symbols-outlined text-[20px] mt-0.5 ${isActive ? 'text-secondary' : 'text-primary'}`}>
+                            description
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-body-sm text-xs font-bold text-primary truncate">
+                                {doc.documentType}
+                              </h4>
+                              {isExpired && (
+                                <span className="bg-red-100 text-red-700 text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                  Expirado
+                                </span>
+                              )}
+                            </div>
+                            <p className="font-data-mono text-[10px] text-outline mt-0.5 truncate">
                               {doc.originalFilename} • {(doc.fileSize / 1024 / 1024).toFixed(2)} MB
                             </p>
+                            {doc.expiresAt && (
+                              <span className="text-[10px] text-secondary font-data-mono block mt-1">
+                                Vence: {new Date(doc.expiresAt).toLocaleDateString()}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div>
+                        <div className="shrink-0 ml-2">
                           {doc.status === 'APPROVED' ? (
-                            <span className="text-secondary material-symbols-outlined text-lg fill">check_circle</span>
+                            <span className="text-secondary material-symbols-outlined text-xl fill" title="Documento Aprobado">
+                              check_circle
+                            </span>
                           ) : doc.status === 'REJECTED' ? (
-                            <span className="text-error material-symbols-outlined text-lg fill">cancel</span>
+                            <span className="text-error material-symbols-outlined text-xl fill" title="Documento Rechazado">
+                              cancel
+                            </span>
                           ) : (
-                            <span className="text-[#b45309] material-symbols-outlined text-lg">hourglass_top</span>
+                            <span className="text-amber-500 material-symbols-outlined text-xl" title="Pendiente de Validación">
+                              hourglass_top
+                            </span>
                           )}
                         </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-xs text-on-surface-variant italic">No documents uploaded.</div>
+                  <div className="text-xs text-on-surface-variant italic p-4 text-center">
+                    No documents uploaded for this psychologist profile.
+                  </div>
                 )}
               </div>
 
-              {/* PDF/Image Document Viewer */}
-              <div className="lg:col-span-8 border border-outline-variant/60 rounded-xl bg-surface p-4 flex flex-col items-center justify-center min-h-[350px] relative">
-                {selectedDocUrl ? (
-                  selectedDocName?.toLowerCase().endsWith('.pdf') ? (
-                    <iframe
-                      src={selectedDocUrl}
-                      title="Document Preview"
-                      className="w-full h-[400px] border-none rounded-lg bg-white shadow-sm"
-                    />
+              {/* PDF/Image Document Viewer & Individual Validation Toolbar */}
+              <div className="lg:col-span-8 flex flex-col space-y-4">
+                {/* Document Preview Frame */}
+                <div className="border border-outline-variant/60 rounded-xl bg-surface p-4 flex flex-col items-center justify-center min-h-[380px] relative">
+                  {selectedDocUrl ? (
+                    selectedDocName?.toLowerCase().endsWith('.pdf') ? (
+                      <iframe
+                        src={selectedDocUrl}
+                        title="Document Preview"
+                        className="w-full h-[420px] border-none rounded-lg bg-white shadow-sm"
+                      />
+                    ) : (
+                      <img
+                        src={selectedDocUrl}
+                        alt="Document Preview"
+                        className="max-w-full max-h-[420px] object-contain rounded-lg shadow-sm"
+                      />
+                    )
+                  ) : loadingDoc ? (
+                    <div className="text-center p-8">
+                      <span className="material-symbols-outlined text-3xl text-secondary animate-spin">sync</span>
+                      <p className="text-xs text-outline mt-2 font-semibold">
+                        Downloading file from secure clinical storage...
+                      </p>
+                    </div>
                   ) : (
-                    <img
-                      src={selectedDocUrl}
-                      alt="Document Preview"
-                      className="max-w-full max-h-[400px] object-contain rounded-lg shadow-sm"
-                    />
-                  )
-                ) : loadingDoc ? (
-                  <div className="text-center">
-                    <span className="material-symbols-outlined text-3xl text-secondary animate-spin">sync</span>
-                    <p className="text-xs text-outline mt-2 font-semibold">Downloading file from secure clinical storage...</p>
-                  </div>
-                ) : (
-                  <div className="text-center p-8 max-w-sm">
-                    <span className="material-symbols-outlined text-5xl text-outline mb-4">picture_as_pdf</span>
-                    <h4 className="font-body-md text-sm font-bold text-primary mb-2">No Document Selected</h4>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                      Select a document from the left list to load and preview its validation credentials in the secure frame.
-                    </p>
-                  </div>
+                    <div className="text-center p-8 max-w-sm">
+                      <span className="material-symbols-outlined text-5xl text-outline mb-4">picture_as_pdf</span>
+                      <h4 className="font-body-md text-sm font-bold text-primary mb-2">No Document Selected</h4>
+                      <p className="text-xs text-on-surface-variant leading-relaxed">
+                        Select a document from the left list to load and preview its validation credentials in the secure frame.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Individual Document Verification & Expiration Toolbar */}
+                {selectedDocId && (
+                  (() => {
+                    const activeDoc = docList.find((d) => d.id === selectedDocId);
+                    if (!activeDoc) return null;
+
+                    return (
+                      <div className="bg-surface-container-low/80 border border-outline-variant rounded-xl p-4 space-y-4 text-left shadow-2xs">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-primary">
+                                Validación Individual: {activeDoc.documentType}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-label-caps ${
+                                  activeDoc.status === 'APPROVED'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : activeDoc.status === 'REJECTED'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {activeDoc.status === 'APPROVED'
+                                  ? 'Aprobado'
+                                  : activeDoc.status === 'REJECTED'
+                                  ? 'Rechazado'
+                                  : 'Pendiente'}
+                              </span>
+                            </div>
+                            <span className="font-data-mono text-[10px] text-on-surface-variant">
+                              Archivo: {activeDoc.originalFilename}
+                            </span>
+                          </div>
+
+                          {/* Quick Status Buttons */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleUpdateDocStatus('APPROVED')}
+                              disabled={updatingDocStatus || activeDoc.status === 'APPROVED'}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shadow-2xs"
+                              title="Aprobar este documento"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                              Aprobar
+                            </button>
+                            <button
+                              onClick={() => handleUpdateDocStatus('REJECTED')}
+                              disabled={updatingDocStatus || activeDoc.status === 'REJECTED'}
+                              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer shadow-2xs"
+                              title="Rechazar este documento"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">cancel</span>
+                              Rechazar
+                            </button>
+                            <button
+                              onClick={() => handleUpdateDocStatus('PENDING')}
+                              disabled={updatingDocStatus || activeDoc.status === 'PENDING'}
+                              className="px-3 py-1.5 bg-surface-container border border-outline-variant hover:bg-surface-variant text-on-surface rounded text-xs font-semibold flex items-center gap-1 transition-colors disabled:opacity-40 cursor-pointer"
+                              title="Marcar como pendiente"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">hourglass_top</span>
+                              Pendiente
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expiration Date Section */}
+                        <div className="pt-3 border-t border-outline-variant/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <label className="font-semibold text-on-surface-variant flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[16px] text-secondary">
+                                event
+                              </span>
+                              Fecha de Expiración / Caducidad (Cédula, Licencia, Póliza):
+                            </label>
+                            <input
+                              type="date"
+                              value={docExpirationInput}
+                              onChange={(e) => setDocExpirationInput(e.target.value)}
+                              className="px-2.5 py-1 bg-surface border border-outline-variant rounded font-data-mono text-xs outline-none focus:border-secondary focus:ring-1 focus:ring-secondary"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleSaveExpirationDate}
+                              disabled={updatingDocStatus || !docExpirationInput}
+                              className="px-3 py-1 bg-primary text-on-primary rounded font-semibold text-xs hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center gap-1 cursor-pointer"
+                            >
+                              {updatingDocStatus && (
+                                <span className="material-symbols-outlined text-xs animate-spin">sync</span>
+                              )}
+                              Guardar Vigencia
+                            </button>
+                            {activeDoc.expiresAt && (
+                              <button
+                                onClick={handleClearExpirationDate}
+                                disabled={updatingDocStatus}
+                                className="px-2.5 py-1 border border-outline-variant text-on-surface-variant hover:bg-surface-container rounded font-semibold text-xs transition-colors"
+                              >
+                                Quitar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </div>

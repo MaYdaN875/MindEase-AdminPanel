@@ -59,7 +59,20 @@ export interface ProfessionalDocument {
   fileSize: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   uploadedAt: string;
+  expiresAt?: string | null;
 }
+
+export const updateDocumentStatus = async (
+  documentId: string,
+  status: 'PENDING' | 'APPROVED' | 'REJECTED',
+  expiresAt?: string | null
+): Promise<ProfessionalDocument> => {
+  const response = await api.put(`/admin/documents/${documentId}/status`, {
+    status,
+    expiresAt,
+  });
+  return response.data.data.document;
+};
 
 export interface VerificationStatusHistory {
   id: string;
@@ -248,4 +261,91 @@ export const updateAdminSpecialty = async (specialtyId: string, name: string): P
 
 export const deleteAdminSpecialty = async (specialtyId: string): Promise<void> => {
   await api.delete(`/admin/specialties/${specialtyId}`);
+};
+
+// ----------------------------------------------------
+// Dashboard & Analytics APIs (Punto 3)
+// ----------------------------------------------------
+export interface TopSpecialtyItem {
+  id: string;
+  name: string;
+  count: number;
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  totalPsychologists: number;
+  verifiedPsychologists: number;
+  pendingRequests: number;
+  resolvedRequests: number;
+  approvalRate: number;
+  statusDistribution: Record<string, number>;
+  topSpecialties: TopSpecialtyItem[];
+  recentAuditLogs: BackendAuditLog[];
+}
+
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+  const response = await api.get('/admin/dashboard/stats');
+  return response.data.data.stats;
+};
+
+// ----------------------------------------------------
+// Compliance CSV Export (Punto 4)
+// ----------------------------------------------------
+export const downloadAuditLogsCsv = async (): Promise<void> => {
+  const response = await api.get('/admin/audit-logs/export-csv', {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `mindease_compliance_audit_logs_${Date.now()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// ----------------------------------------------------
+// System Notifications APIs (Punto 5)
+// ----------------------------------------------------
+export interface SystemNotification {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export const getNotifications = async (): Promise<{
+  notifications: SystemNotification[];
+  unreadCount: number;
+}> => {
+  const response = await api.get('/admin/notifications');
+  return response.data.data;
+};
+
+export const markNotificationRead = async (notificationId: string): Promise<void> => {
+  await api.put(`/admin/notifications/${notificationId}/read`);
+};
+
+export const markAllNotificationsRead = async (): Promise<void> => {
+  await api.put('/admin/notifications/mark-all-read');
+};
+
+export const broadcastNotification = async (params: {
+  title: string;
+  message: string;
+  targetUserId?: string;
+}): Promise<void> => {
+  await api.post('/admin/notifications/broadcast', params);
 };

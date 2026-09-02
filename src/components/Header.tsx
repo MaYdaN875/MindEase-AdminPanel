@@ -1,4 +1,5 @@
 import React from 'react';
+import { NotificationsPopover } from './NotificationsPopover';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -64,10 +65,9 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
-        {/* Quick Action Buttons */}
-        <button className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80 p-2 rounded-full hover:bg-surface-container flex items-center justify-center">
-          <span className="material-symbols-outlined">notifications</span>
-        </button>
+        {/* Live Notifications Popover */}
+        <NotificationsPopover />
+
         <button className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-80 p-2 rounded-full hover:bg-surface-container flex items-center justify-center">
           <span className="material-symbols-outlined">security</span>
         </button>
