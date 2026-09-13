@@ -69,9 +69,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const handleToggleSuspension = async (user: AdminUserRecord) => {
     const isSuspended =
-      user.status === 'SUSPENDED' ||
-      user.psychologistProfile?.status === 'SUSPENDIDO' ||
-      user.psychologistProfile?.status === 'INACTIVO';
+      user.status !== 'ACTIVE';
 
     const newStatus = isSuspended ? 'ACTIVE' : 'SUSPENDED';
 
@@ -153,8 +151,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const totalSuspended = users.filter(
     (u) =>
-      u.status === 'SUSPENDED' ||
-      u.psychologistProfile?.status === 'SUSPENDIDO'
+      u.status === 'SUSPENDED'
   ).length;
 
   const getRoleBadgeClass = (roleName: string) => {
@@ -179,8 +176,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const getStatusBadge = (user: AdminUserRecord) => {
     const isSuspended =
-      user.status === 'SUSPENDED' ||
-      user.psychologistProfile?.status === 'SUSPENDIDO';
+      user.status === 'SUSPENDED';
 
     if (isSuspended) {
       return (
@@ -188,6 +184,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           Suspended
         </span>
       );
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return <span className="text-xs font-semibold">{user.status}</span>;
     }
 
     if (user.psychologistProfile) {
@@ -444,8 +444,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   );
 
                   const isSuspended =
-                    user.status === 'SUSPENDED' ||
-                    user.psychologistProfile?.status === 'SUSPENDIDO';
+                    user.status !== 'ACTIVE';
 
                   return (
                     <tr
