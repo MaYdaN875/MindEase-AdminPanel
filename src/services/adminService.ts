@@ -349,3 +349,143 @@ export const broadcastNotification = async (params: {
 }): Promise<void> => {
   await api.post('/admin/notifications/broadcast', params);
 };
+
+// ----------------------------------------------------
+// Moderation & Reports APIs (Community & User Conduct)
+// ----------------------------------------------------
+
+export interface CommunityReportRecord {
+  id: string;
+  reporterId: string;
+  channelId?: string | null;
+  postId?: string | null;
+  commentId?: string | null;
+  reason: string;
+  details?: string | null;
+  status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
+  moderatorNotes?: string | null;
+  reviewedById?: string | null;
+  createdAt: string;
+  reporter: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  reviewedBy?: {
+    id: string;
+    name: string;
+  } | null;
+  channel?: {
+    id: string;
+    name: string;
+    isActive: boolean;
+  } | null;
+  post?: {
+    id: string;
+    title: string;
+    status: 'DRAFT' | 'PUBLISHED' | 'HIDDEN' | 'ARCHIVED';
+    author: {
+      id: string;
+      name: string;
+    };
+  } | null;
+  comment?: {
+    id: string;
+    content: string;
+    isHidden: boolean;
+    user: {
+      id: string;
+      name: string;
+    };
+  } | null;
+}
+
+export interface UserConductReportRecord {
+  id: string;
+  reporterId: string;
+  reportedUserId: string;
+  appointmentId?: string | null;
+  reason: string;
+  description: string;
+  evidenceUrls: string[];
+  status: 'PENDING' | 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED';
+  reviewedById?: string | null;
+  moderatorNotes?: string | null;
+  ticketId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reporter: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  reportedUser: {
+    id: string;
+    name: string;
+    email: string;
+    psychologistProfile?: {
+      id: string;
+      status: string;
+    } | null;
+  };
+  appointment?: {
+    id: string;
+    startAt: string;
+    status: string;
+    price: number;
+  } | null;
+  reviewedBy?: {
+    id: string;
+    name: string;
+  } | null;
+  ticket?: {
+    id: string;
+    ticketNumber: number;
+    status: string;
+  } | null;
+}
+
+export const getCommunityReports = async (params?: {
+  status?: string;
+  targetType?: string;
+}): Promise<CommunityReportRecord[]> => {
+  const response = await api.get('/community/moderation/reports', { params });
+  return response.data.data?.items || [];
+};
+
+export const resolveCommunityReport = async (
+  reportId: string,
+  status: 'RESOLVED' | 'DISMISSED',
+  moderatorNotes?: string
+): Promise<void> => {
+  await api.put(`/community/moderation/reports/${reportId}`, { status, moderatorNotes });
+};
+
+export const toggleCommunityPostVisibility = async (
+  postId: string,
+  action: 'HIDE' | 'UNHIDE',
+  hiddenReason: string
+): Promise<void> => {
+  await api.put(`/community/moderation/posts/${postId}/visibility`, { action, hiddenReason });
+};
+
+export const getUserConductReports = async (params?: {
+  status?: string;
+  reason?: string;
+}): Promise<UserConductReportRecord[]> => {
+  const response = await api.get('/support/user-reports', { params });
+  return response.data.data?.items || [];
+};
+
+export const investigateUserConductReport = async (
+  reportId: string,
+  payload: {
+    status: 'PENDING' | 'INVESTIGATING' | 'RESOLVED' | 'DISMISSED';
+    moderatorNotes?: string;
+    escalateToTicket?: boolean;
+  }
+): Promise<{ report: any; ticket?: any }> => {
+  const response = await api.put(`/support/user-reports/${reportId}/investigate`, payload);
+  return response.data.data;
+};
+
