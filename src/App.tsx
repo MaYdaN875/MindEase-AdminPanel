@@ -32,12 +32,22 @@ import type {
   RoleRecord
 } from './services/adminService';
 import './App.css';
+import { getStaffSession, canAccess, type StaffSession } from './services/adminService';
+import { SupportView } from './views/SupportView';
+import { CommunityAdminView } from './views/CommunityAdminView';
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
   const [currentView, setCurrentView] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [session, setSession] = useState<StaffSession | null>(null);
+  const [supportTicketId, setSupportTicketId] = useState<string | undefined>();
+  const staffRoles = session?.roles ?? [];
+  useEffect(() => {
+    const expired = () => { setToken(null); setSession(null); };
+    window.addEventListener('admin-session-expired', expired);
+    return () => window.removeEventListener('admin-session-expired', expired);
+  }, []);
   
   const [applications, setApplications] = useState<PsychologistApplication[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<VerificationRequest | null>(null);
@@ -59,11 +69,15 @@ function App() {
     setLoading(true);
     setError(null);
     try {
+      const current = await getStaffSession();
+      setSession(current);
+      setCurrentView(view => canAccess(current.roles, view) ? view :
+        ['dashboard', 'moderation', 'support'].find(v => canAccess(current.roles, v))!);
       const [reqs, logs, dbUsers, dbRoles] = await Promise.all([
-        getVerificationRequests(),
-        getAuditLogs(),
-        getAdminUsers(),
-        getSystemRoles(),
+        canAccess(current.roles, 'requests') ? getVerificationRequests() : Promise.resolve([]),
+        canAccess(current.roles, 'audit') ? getAuditLogs() : Promise.resolve([]),
+        canAccess(current.roles, 'users') ? getAdminUsers() : Promise.resolve([]),
+        canAccess(current.roles, 'users') ? getSystemRoles() : Promise.resolve([]),
       ]);
 
       setApplications(reqs.map(mapBackendToApplication));
@@ -72,7 +86,7 @@ function App() {
       setRoles(dbRoles);
     } catch (err: any) {
       console.error(err);
-      if (err.response?.status === 401) {
+      if (err.response?.status === 401 || err.response?.status === 403 || err.message === 'Esta cuenta no tiene acceso al panel.') {
         handleLogout();
       } else {
         setError('Failed to fetch data from backend. Make sure the Node server is running.');
@@ -90,6 +104,8 @@ function App() {
   const handleLogout = () => {
     logoutAdmin();
     setToken(null);
+    setSession(null);
+    setApplications([]); setUsers([]); setAuditLogs([]); setRoles([]); setSelectedRequest(null);
     setCurrentView('dashboard');
   };
 
@@ -146,11 +162,11 @@ function App() {
 
   // Helper to map DB AuditLog to UI AuditLog
   const mapBackendToAuditLog = (log: BackendAuditLog): AuditLog => {
-    let evType: AuditLog['eventType'] = 'SESSION_START';
+    let evType: AuditLog['eventType'] = log.action;
     if (log.action === 'APPROVE_APPLICATION') evType = 'APPROVE_APPLICATION';
     else if (log.action === 'REJECT_APPLICATION') evType = 'REJECT_APPLICATION';
     else if (log.action === 'REQUEST_CHANGES') evType = 'REQUEST_CHANGES';
-    else if (log.action === 'ASSIGN_REVISOR') evType = 'SESSION_START';
+    else if (log.action === 'ASSIGN_REVISOR') evType = 'ASSIGN_REVISOR';
     else if (log.action === 'AUTH_FAILURE') evType = 'AUTH_FAILURE';
     else if (log.action === 'DATA_EXPORT') evType = 'DATA_EXPORT';
 
@@ -175,7 +191,7 @@ function App() {
       eventType: evType,
       severity,
       description: desc,
-      ipAddress: log.ipAddress || '127.0.0.1',
+      ipAddress: log.ipAddress || 'No registrada',
     };
   };
 
@@ -277,6 +293,7 @@ function App() {
   };
 
   const renderActiveView = () => {
+    if (!canAccess(staffRoles, currentView)) return <p>{session ? 'No tienes permiso para esta sección. Selecciona una opción del menú.' : 'Cargando permisos del panel…'}</p>;
     switch (currentView) {
       case 'dashboard':
         return (
@@ -291,8 +308,8 @@ function App() {
             applications={applications}
             onOpenDossier={handleOpenDossier}
             onApprove={handleApprove}
-            onReject={(id) => handleReject(id, 'Admin Committee Decision')}
-            onRequestChanges={(id) => handleRequestChanges(id, 'Incomplete documentation upload.')}
+            onReject={handleOpenDossier}
+            onRequestChanges={handleOpenDossier}
           />
         );
       case 'dossier':
@@ -327,7 +344,11 @@ function App() {
           />
         );
       case 'moderation':
-        return <ReportsView />;
+        return <ReportsView roles={staffRoles} onOpenTicket={id => { setSupportTicketId(id); setCurrentView('support'); }} />;
+      case 'community':
+        return <CommunityAdminView roles={staffRoles} />;
+      case 'support':
+        return <SupportView key={supportTicketId ?? 'inbox'} userId={session!.id} initialTicketId={supportTicketId} />;
       case 'catalogs':
         return <CatalogsView />;
       case 'audit':
@@ -351,6 +372,7 @@ function App() {
     <div className="flex w-screen h-screen overflow-hidden bg-background text-on-background font-body-md">
       {/* Sidebar Navigation */}
       <Sidebar
+        roles={staffRoles}
         currentView={currentView}
         onViewChange={setCurrentView}
         isMobileMenuOpen={isMobileMenuOpen}
@@ -363,8 +385,9 @@ function App() {
         <Header
           onMenuClick={() => setIsMobileMenuOpen(true)}
           currentView={currentView}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          name={session?.name ?? 'Cargando…'}
+          roles={staffRoles}
+          onLogout={handleLogout}
         />
 
         {/* Global Loading / Error Banners */}

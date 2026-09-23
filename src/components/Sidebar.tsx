@@ -1,6 +1,8 @@
 import React from 'react';
+import { canAccess } from '../services/permissions';
 
 interface SidebarProps {
+  roles: string[];
   currentView: string;
   onViewChange: (view: string) => void;
   isMobileMenuOpen: boolean;
@@ -8,6 +10,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  roles,
   currentView,
   onViewChange,
   isMobileMenuOpen,
@@ -18,7 +21,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { name: 'Requests', id: 'requests', icon: 'pending_actions' },
     { name: 'User Management', id: 'users', icon: 'group' },
     { name: 'Reports & Moderation', id: 'moderation', icon: 'assessment' },
+    { name: 'Community', id: 'community', icon: 'forum' },
     { name: 'Catalogs', id: 'catalogs', icon: 'library_books' },
+    { name: 'Soporte', id: 'support', icon: 'support_agent' },
     { name: 'Audit Logs', id: 'audit', icon: 'history' },
   ];
 
@@ -51,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Navigation */}
       <nav className="flex-1 px-4 space-y-1">
-        {navItems.map((item) => {
+        {navItems.filter(item => canAccess(roles, item.id)).map((item) => {
           const isActive = currentView === item.id || (item.id === 'requests' && currentView === 'dossier');
           return (
             <button
@@ -70,17 +75,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Footer Navigation */}
-      <div className="px-4 mt-auto space-y-1 border-t border-outline-variant/20 pt-4">
-        <button className="flex items-center gap-3 px-4 py-3 w-full text-left text-on-primary-container/70 hover:bg-primary-fixed-dim/10 hover:text-on-primary-container transition-all duration-200 border-l-4 border-transparent">
-          <span className="material-symbols-outlined">settings</span>
-          <span className="font-body-md text-body-md">Settings</span>
-        </button>
-        <button className="flex items-center gap-3 px-4 py-3 w-full text-left text-on-primary-container/70 hover:bg-primary-fixed-dim/10 hover:text-on-primary-container transition-all duration-200 border-l-4 border-transparent">
-          <span className="material-symbols-outlined">help</span>
-          <span className="font-body-md text-body-md">Support</span>
-        </button>
-      </div>
     </div>
   );
 

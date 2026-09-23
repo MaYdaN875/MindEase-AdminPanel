@@ -11,16 +11,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Suggestions from local database check
-  const suggestEmail = 'admin.val_1785967730381@mindease.com';
-  const suggestPassword = 'adminPassword123';
-
-  const handlePrefill = () => {
-    setEmail(suggestEmail);
-    setPassword(suggestPassword);
-    setError(null);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -32,7 +22,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       console.error(err);
       setError(
-        err.response?.data?.message ||
+        err.response?.data?.message || err.message ||
         'Failed to authenticate. Please check your credentials or database status.'
       );
     } finally {
@@ -101,34 +91,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </form>
       </div>
 
-      {/* Local Test Database Suggestions Box */}
-      <div className="w-full max-w-md mt-6 p-4 rounded-xl border border-dashed border-outline/30 bg-surface-container-low/40 text-left">
-        <h3 className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-2 flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-secondary text-sm">construction</span>
-          Local Developer Helper
-        </h3>
-        <p className="text-[11px] text-on-surface-variant leading-normal mb-3">
-          We scanned your database and found a local administrator user. Click below to prefill these testing credentials.
-        </p>
-        <div className="flex justify-between items-center bg-surface-container-lowest p-3 border border-outline-variant/60 rounded-lg">
-          <div className="text-[10px] space-y-0.5">
-            <div>
-              <span className="text-outline font-semibold">User: </span>
-              <span className="font-data-mono font-bold text-primary">{suggestEmail}</span>
-            </div>
-            <div>
-              <span className="text-outline font-semibold">Pass: </span>
-              <span className="font-data-mono font-bold text-primary">{suggestPassword}</span>
-            </div>
-          </div>
-          <button
-            onClick={handlePrefill}
-            className="px-2.5 py-1.5 bg-secondary-fixed text-on-secondary-fixed-variant rounded text-[10px] font-bold uppercase hover:bg-secondary-fixed-dim transition-colors"
-          >
-            Prefill
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

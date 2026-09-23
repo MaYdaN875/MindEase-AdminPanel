@@ -1,4 +1,42 @@
 import api from './api';
+import { hasStaffRole } from './permissions';
+export { canAccess } from './permissions';
+export interface StaffSession { id: string; name: string; email: string; roles: string[] }
+export async function getStaffSession(): Promise<StaffSession> {
+  const response = await api.get('/users/profile');
+  const user = response.data.data.user as StaffSession;
+  if (!hasStaffRole(user.roles)) throw new Error('Esta cuenta no tiene acceso al panel.');
+  return user;
+}
+
+async function allReportPages<T>(route: string, params?: object): Promise<T[]> {
+  const items: T[] = []; const seen = new Set<string>(); let cursor: string | undefined;
+  do {
+    const { data } = await api.get(route, { params: { ...params, limit: 50, cursor } });
+    items.push(...data.data.items);
+    const next = data.data.hasMore ? data.data.nextCursor : undefined;
+    if (next && seen.has(next)) throw new Error('Cursor repetido del servidor');
+    if (next) seen.add(next);
+    cursor = next;
+  } while (cursor);
+  return items;
+}
+
+export async function openProtectedMedia(value: string): Promise<void> {
+  const origin = new URL(api.defaults.baseURL!, window.location.origin).origin;
+  const media = new URL(value, origin);
+  if (media.origin !== origin || !/^\/uploads\/(support|community)\//.test(media.pathname)) throw new Error('Referencia de archivo no permitida');
+  const tab = window.open('about:blank', '_blank');
+  if (tab) tab.opener = null;
+  try {
+    const response = await api.post('/media/access', { url: media.pathname });
+    const signed = new URL(response.data.data.url, origin);
+    if (signed.origin !== origin || signed.pathname !== media.pathname) throw new Error('Enlace de descarga invalido');
+    if (tab) tab.location.replace(signed.href);
+    else throw new Error('Permite ventanas emergentes para abrir el archivo');
+  } catch (error) { tab?.close(); throw error; }
+}
+
 
 // Types representing the backend database schemas
 export interface User {
@@ -142,6 +180,7 @@ export interface BackendAuditLog {
 // API methods to connect to Node.js backend
 export const loginAdmin = async (email: string, password: string): Promise<string> => {
   const response = await api.post('/auth/login', { email, password });
+  if (!hasStaffRole(response.data.data.user.roles)) throw new Error('Esta cuenta no tiene acceso al panel.');
   const token = response.data.data.token;
   localStorage.setItem('admin_token', token);
   return token;
@@ -449,8 +488,7 @@ export const getCommunityReports = async (params?: {
   status?: string;
   targetType?: string;
 }): Promise<CommunityReportRecord[]> => {
-  const response = await api.get('/community/moderation/reports', { params });
-  return response.data.data?.items || [];
+  return allReportPages<CommunityReportRecord>('/community/reports', params);
 };
 
 export const resolveCommunityReport = async (
@@ -458,7 +496,7 @@ export const resolveCommunityReport = async (
   status: 'RESOLVED' | 'DISMISSED',
   moderatorNotes?: string
 ): Promise<void> => {
-  await api.put(`/community/moderation/reports/${reportId}`, { status, moderatorNotes });
+  await api.put(`/community/reports/${reportId}/review`, { status, moderatorNotes });
 };
 
 export const toggleCommunityPostVisibility = async (
@@ -466,15 +504,14 @@ export const toggleCommunityPostVisibility = async (
   action: 'HIDE' | 'UNHIDE',
   hiddenReason: string
 ): Promise<void> => {
-  await api.put(`/community/moderation/posts/${postId}/visibility`, { action, hiddenReason });
+  await api.put(`/community/posts/${postId}/moderate`, { action, hiddenReason });
 };
 
 export const getUserConductReports = async (params?: {
   status?: string;
   reason?: string;
 }): Promise<UserConductReportRecord[]> => {
-  const response = await api.get('/support/user-reports', { params });
-  return response.data.data?.items || [];
+  return allReportPages<UserConductReportRecord>('/support/user-reports', params);
 };
 
 export const investigateUserConductReport = async (
@@ -488,4 +525,3 @@ export const investigateUserConductReport = async (
   const response = await api.put(`/support/user-reports/${reportId}/investigate`, payload);
   return response.data.data;
 };
-

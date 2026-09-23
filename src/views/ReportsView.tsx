@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import api from '../services/api';
 import {
   getCommunityReports,
+  openProtectedMedia,
+  canAccess,
   resolveCommunityReport,
   toggleCommunityPostVisibility,
   getUserConductReports,
@@ -9,8 +12,9 @@ import {
   type UserConductReportRecord,
 } from '../services/adminService';
 
-export const ReportsView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'community' | 'conduct'>('community');
+export const ReportsView: React.FC<{ roles: string[]; onOpenTicket: (id: string) => void }> = ({ roles, onOpenTicket }) => {
+  const communityAllowed = canAccess(roles, 'community');
+  const [activeTab, setActiveTab] = useState<'community' | 'conduct'>(communityAllowed ? 'community' : 'conduct');
   const [communityReports, setCommunityReports] = useState<CommunityReportRecord[]>([]);
   const [conductReports, setConductReports] = useState<UserConductReportRecord[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -24,6 +28,27 @@ export const ReportsView: React.FC = () => {
   const [moderatorNotes, setModeratorNotes] = useState<string>('');
   const [hiddenReason, setHiddenReason] = useState<string>('Contenido que vulnera las normas comunitarias.');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [preview, setPreview] = useState<{ title: string; content: string; media: { url: string; caption?: string }[] } | null>(null);
+
+  const moderateResource = async (route: string, body: object, method: 'put' | 'patch' = 'put') => {
+    setIsProcessing(true);
+    try {
+      await api[method](route, body);
+      setSelectedCommunityReport(null); setPreview(null);
+      setActionSuccess('Moderación aplicada');
+      await fetchReports();
+    } catch (error) {
+      const failure = error as { response?: { data?: { message?: string } } };
+      alert(failure.response?.data?.message || 'No se pudo moderar el recurso');
+    } finally { setIsProcessing(false); }
+  };
+
+  const inspectPost = async (id: string) => {
+    setIsProcessing(true); setPreview(null);
+    try { const response = await api.get(`/community/posts/${id}`); setPreview(response.data.data.post); }
+    catch { alert('No se pudo cargar el contenido'); }
+    finally { setIsProcessing(false); }
+  };
 
   useEffect(() => {
     fetchReports();
@@ -33,12 +58,13 @@ export const ReportsView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [comm, conduct] = await Promise.all([
-        getCommunityReports(),
+      const results = await Promise.allSettled([
+        communityAllowed ? getCommunityReports() : Promise.resolve([]),
         getUserConductReports(),
       ]);
-      setCommunityReports(comm);
-      setConductReports(conduct);
+      if (results[0].status === 'fulfilled') setCommunityReports(results[0].value);
+      if (results[1].status === 'fulfilled') setConductReports(results[1].value);
+      if (results.some(r => r.status === 'rejected')) setError('No se pudo actualizar una de las bandejas. Los demás resultados siguen disponibles.');
     } catch (err: any) {
       console.error('Error fetching moderation reports:', err);
       setError('No se pudieron cargar los reportes desde el servidor.');
@@ -103,6 +129,7 @@ export const ReportsView: React.FC = () => {
       setSelectedConductReport(null);
       setModeratorNotes('');
       await fetchReports();
+      if (res.ticket && canAccess(roles, 'support')) onOpenTicket(res.ticket.id);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error al procesar reporte');
     } finally {
@@ -204,7 +231,8 @@ export const ReportsView: React.FC = () => {
         <div className="p-4 border-b border-outline-variant flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface-container-low/30">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('community')}
+              disabled={!communityAllowed}
+            onClick={() => setActiveTab('community')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
                 activeTab === 'community'
                   ? 'bg-primary text-on-primary shadow-sm'
@@ -336,7 +364,7 @@ export const ReportsView: React.FC = () => {
                         </td>
                         <td className="p-3.5 text-right space-x-2">
                           <button
-                            onClick={() => setSelectedCommunityReport(report)}
+                            onClick={() => { setPreview(null); setModeratorNotes(report.moderatorNotes ?? ''); setSelectedCommunityReport(report); }}
                             className="px-2.5 py-1 bg-primary text-on-primary rounded text-xs font-semibold hover:bg-primary/90 transition-colors"
                           >
                             Revisar
@@ -485,6 +513,17 @@ export const ReportsView: React.FC = () => {
                 </div>
               </div>
 
+              {selectedCommunityReport.post && <button disabled={isProcessing} className="underline" onClick={() => void inspectPost(selectedCommunityReport.post!.id)}>Inspeccionar publicación completa</button>}
+              {preview && <div className="border p-3 rounded"><strong>{preview.title}</strong><p className="whitespace-pre-wrap">{preview.content}</p>
+                {preview.media?.map((media, index) => <button key={media.url} className="block underline" onClick={() => {
+                  if (media.url.startsWith('/uploads/')) void openProtectedMedia(media.url).catch(error => alert(error.message));
+                  else {
+                    try { const url = new URL(media.url); if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error();
+                      if (confirm(`Abrir recurso externo de ${url.host}?`)) window.open(url.href, '_blank', 'noopener,noreferrer');
+                    } catch { alert('Enlace no permitido'); }
+                  }
+                }}>Adjunto {index + 1}: {media.caption ?? 'Abrir'}</button>)}</div>}
+
               <div>
                 <label className="text-on-surface font-semibold block mb-1">Notas del Moderador</label>
                 <textarea
@@ -510,6 +549,10 @@ export const ReportsView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-outline-variant/40">
+              {selectedCommunityReport.comment && <button disabled={isProcessing} className="border rounded px-3 py-2" onClick={() => void moderateResource(`/community/comments/${selectedCommunityReport.comment!.id}/moderate`, { action: selectedCommunityReport.comment!.isHidden ? 'UNHIDE' : 'HIDE', hiddenReason })}>{selectedCommunityReport.comment.isHidden ? 'Reactivar comentario' : 'Ocultar comentario'}</button>}
+              {selectedCommunityReport.channel && canAccess(roles, 'users') && <button disabled={isProcessing} className="border rounded px-3 py-2" onClick={() => {
+                if (confirm('¿Cambiar disponibilidad del canal? Esto afecta todas sus publicaciones.')) void moderateResource(`/admin/community/channels/${selectedCommunityReport.channel!.id}/status`, { isActive: !selectedCommunityReport.channel!.isActive, reason: hiddenReason }, 'patch');
+              }}>{selectedCommunityReport.channel.isActive ? 'Desactivar canal' : 'Activar canal'}</button>}
               {selectedCommunityReport.post && (
                 selectedCommunityReport.post.status === 'HIDDEN' ? (
                   <button
@@ -613,9 +656,8 @@ export const ReportsView: React.FC = () => {
                     {selectedConductReport.evidenceUrls.map((url, i) => (
                       <a
                         key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
+                        href="#"
+                        onClick={(event) => { event.preventDefault(); void openProtectedMedia(url).catch(error => alert(error.message)); }}
                         className="px-2 py-1 bg-surface-container hover:bg-surface-container-high rounded text-[11px] font-semibold text-primary flex items-center gap-1 border border-outline-variant/50"
                       >
                         <span className="material-symbols-outlined text-xs">attach_file</span>
@@ -639,6 +681,7 @@ export const ReportsView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-outline-variant/40">
+              {selectedConductReport.ticketId && canAccess(roles, 'support') && <button className="border rounded px-3 py-2" onClick={() => onOpenTicket(selectedConductReport.ticketId!)}>Abrir ticket #{selectedConductReport.ticket?.ticketNumber}</button>}
               {!selectedConductReport.ticketId && (
                 <button
                   disabled={isProcessing}

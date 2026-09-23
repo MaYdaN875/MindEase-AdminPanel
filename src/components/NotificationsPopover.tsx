@@ -7,7 +7,7 @@ import {
 } from '../services/adminService';
 import type { SystemNotification } from '../services/adminService';
 
-export const NotificationsPopover: React.FC = () => {
+export const NotificationsPopover: React.FC<{ canBroadcast?: boolean }> = ({ canBroadcast = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -200,6 +200,7 @@ export const NotificationsPopover: React.FC = () => {
           {/* Footer with Broadcast action */}
           <div className="p-2.5 border-t border-outline-variant/40 bg-[#F8FAFC] flex justify-between items-center text-xs">
             <button
+              disabled={!canBroadcast}
               onClick={() => {
                 setIsOpen(false);
                 setShowBroadcastModal(true);
@@ -214,7 +215,7 @@ export const NotificationsPopover: React.FC = () => {
       )}
 
       {/* Broadcast Modal */}
-      {showBroadcastModal && (
+      {showBroadcastModal && canBroadcast && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-2xl animate-scale-in text-left">
             <h3 className="font-headline-sm text-base font-bold text-primary mb-4 flex items-center gap-2">

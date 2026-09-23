@@ -77,14 +77,14 @@ export const CatalogsView: React.FC = () => {
     }
   };
 
-  const mapSpecialtyToCatalogItem = (sp: SpecialtyRecord, index: number): CatalogItem => {
+  const mapSpecialtyToCatalogItem = (sp: SpecialtyRecord): CatalogItem => {
     const code = sp.name
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, '-')
       .substring(0, 12);
 
     return {
-      id: sp.id.substring(0, 8).toUpperCase() || `SPC-${String(index + 1).padStart(3, '0')}`,
+      id: sp.id,
       name: sp.name,
       code,
       status: 'Active',
@@ -218,9 +218,9 @@ export const CatalogsView: React.FC = () => {
     }
   };
 
-  const handleOpenEdit = (item: CatalogItem, origIndex: number) => {
+  const handleOpenEdit = (item: CatalogItem) => {
     if (activeCatalog === 'specialties') {
-      const dbRecord = specialtiesDb[origIndex];
+      const dbRecord = specialtiesDb.find(record => record.id === item.id);
       if (dbRecord) {
         setEditingItem({ id: dbRecord.id, name: dbRecord.name });
         setEditName(dbRecord.name);
@@ -274,8 +274,8 @@ export const CatalogsView: React.FC = () => {
     setEditName('');
   };
 
-  const handleDeleteSpecialty = async (dbIndex: number) => {
-    const dbRecord = specialtiesDb[dbIndex];
+  const handleDeleteSpecialty = async (id: string) => {
+    const dbRecord = specialtiesDb.find(record => record.id === id);
     if (!dbRecord) return;
 
     if (
@@ -313,6 +313,7 @@ export const CatalogsView: React.FC = () => {
 
   return (
     <div className="space-y-stack-lg animate-fade-in text-left">
+      {activeCatalog !== 'specialties' && <p role="status" className="p-3 bg-amber-50 border rounded">Catálogo de demostración: no conectado al backend. Edición deshabilitada.</p>}
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -336,6 +337,7 @@ export const CatalogsView: React.FC = () => {
             </button>
           )}
           <button
+            disabled={activeCatalog !== 'specialties'}
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary font-body-md text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
           >
@@ -524,7 +526,7 @@ export const CatalogsView: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredList.map((item, idx) => (
+                  filteredList.map((item) => (
                     <tr
                       key={item.id}
                       className="hover:bg-[#F8FAFC] transition-colors group"
@@ -561,7 +563,8 @@ export const CatalogsView: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5 md:opacity-0 group-hover:opacity-100 transition-opacity">
                           {/* Edit Button */}
                           <button
-                            onClick={() => handleOpenEdit(item, idx)}
+                            disabled={activeCatalog !== 'specialties'}
+                            onClick={() => handleOpenEdit(item)}
                             className="p-1.5 text-outline hover:text-primary transition-colors rounded hover:bg-surface-container-high"
                             title="Edit Taxonomy Name"
                           >
@@ -571,7 +574,7 @@ export const CatalogsView: React.FC = () => {
                           {/* Delete or Archive */}
                           {activeCatalog === 'specialties' ? (
                             <button
-                              onClick={() => handleDeleteSpecialty(idx)}
+                              onClick={() => handleDeleteSpecialty(item.id)}
                               className="p-1.5 text-outline hover:text-error transition-colors rounded hover:bg-error-container/50"
                               title="Delete Specialty from Database"
                             >
@@ -579,6 +582,7 @@ export const CatalogsView: React.FC = () => {
                             </button>
                           ) : (
                             <button
+                              disabled
                               onClick={() => handleToggleStatus(item.id)}
                               className="p-1.5 text-outline hover:text-error transition-colors rounded hover:bg-error-container/50"
                               title={item.status === 'Active' ? 'Suspend Entry' : 'Activate Entry'}
