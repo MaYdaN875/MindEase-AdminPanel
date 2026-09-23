@@ -26,15 +26,10 @@ export async function openProtectedMedia(value: string): Promise<void> {
   const origin = new URL(api.defaults.baseURL!, window.location.origin).origin;
   const media = new URL(value, origin);
   if (media.origin !== origin || !/^\/uploads\/(support|community)\//.test(media.pathname)) throw new Error('Referencia de archivo no permitida');
-  const tab = window.open('about:blank', '_blank');
-  if (tab) tab.opener = null;
-  try {
-    const response = await api.post('/media/access', { url: media.pathname });
-    const signed = new URL(response.data.data.url, origin);
-    if (signed.origin !== origin || signed.pathname !== media.pathname) throw new Error('Enlace de descarga invalido');
-    if (tab) tab.location.replace(signed.href);
-    else throw new Error('Permite ventanas emergentes para abrir el archivo');
-  } catch (error) { tab?.close(); throw error; }
+  const response = await api.post('/media/access', { url: media.pathname });
+  const signed = new URL(response.data.data.url, origin);
+  if (signed.origin !== origin || signed.pathname !== media.pathname) throw new Error('Enlace de descarga invalido');
+  window.dispatchEvent(new CustomEvent('admin-media-preview', { detail: { url: signed.href, path: media.pathname } }));
 }
 
 

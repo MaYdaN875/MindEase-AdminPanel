@@ -1,34 +1,32 @@
-# Panel administrativo — correcciones e integración
+# Panel administrativo — estado al 23 de septiembre de 2026
 
-## Implementado en este bloque
+## Tres bloques implementados
 
-- Selección de especialidades por UUID completo al editar/eliminar, incluso después de filtrar.
-- Rutas reales de Community, recuperación de todas las páginas de reportes y cargas independientes por bandeja.
-- Inspección del contenido de publicaciones; ocultar/reactivar publicaciones y comentarios; activar/desactivar canales denunciados solo para administradores.
-- Apertura de evidencias a través de enlaces autorizados del backend, sin compartir el token de sesión.
-- Perfil real obtenido mediante `/users/profile`, navegación y cargas según roles, cierre de sesión y manejo central de 401.
-- Credenciales de demostración eliminadas del login. Si eran válidas, aún debe rotarse la contraseña de esa cuenta; quitar código no revoca credenciales.
-- Acciones rápidas de rechazo/corrección abren el expediente para documentar el dictamen, sin motivos genéricos automáticos.
-- Auditoría conserva la acción real y no inventa direcciones IP.
-- Catálogos no persistentes marcados como demostración, sin edición. Búsqueda global y botones decorativos sin funcionalidad retirados.
-- Consola de soporte: búsqueda, filtro por estado, paginación, detalle, asignación propia/desasignación, estado, prioridad, respuesta pública, nota interna y adjuntos privados.
-- Backend: moderadores pueden consultar evidencias de reportes de conducta, no archivos arbitrarios de soporte. Notificaciones administrativas restringidas a su destinatario.
+1. Activación y seguridad: panel local http://localhost:4173, identidad real, navegación por rol, cierre de sesión y manejo de 401. Solo la cuenta de demostración autorizada quedó INACTIVE, con auditoría DISABLE_DEMO_ACCOUNT. Adjuntos privados con autorización, visor interno, descarga y renovación de enlaces temporales; moderadores sin acceso a archivos ajenos de soporte.
+2. Soporte: asignación a otros agentes activos, filtros por estado/prioridad/categoría/agente, paginación consistente, métricas con tamaño de muestra, navegación reporte → ticket, respuestas públicas, notas internas y adjuntos privados.
+3. Community: administración general de canales, categorías, publicaciones, comentarios e historial. Categorías editables solo por ADMIN/SUPERADMIN. Moderación con motivo y auditoría transaccional. No se permite publicar borradores mediante reactivación ni que el profesional reactive un canal deshabilitado por administración. Desactivar categorías no oculta canales existentes.
 
-El enlace de expediente desde Usuarios se conserva: el backend ya acepta tanto el ID de solicitud como el de perfil. No era necesario cambiarlo.
+Se conservan las correcciones de selección de especialidades por UUID, dictámenes documentados, auditoría sin IP inventada y notificaciones restringidas al destinatario.
 
-## Validación y despliegue
+## Validación y datos
 
-`npm test` ejecuta pruebas con el runner de Node; compila en memoria los servicios TypeScript reales y sustituye HTTP/navegador. Incluye una comprobación estructural de selección de especialidades. No son pruebas visuales extremo a extremo.
+- Frontend: 8 pruebas aprobadas; compilación TypeScript/Vite exitosa.
+- Integración administrativa: 44 comprobaciones aprobadas.
+- Regresión de soporte: 64 comprobaciones aprobadas.
+- Regresión de Community: 38 comprobaciones aprobadas.
+- Navegador con datos sintéticos: ADMIN, SUPERADMIN, REVISOR, MODERATOR y SUPPORT; creación de categoría, asignación de agente, navegación reporte → ticket y carga efectiva de imagen privada en el visor.
+- Esquemas de prueba temporales aislados. No se sustituyó la base existente ni se requirieron migraciones.
+- Conteos conservados: 20 usuarios, 23 citas, 10 pagos, 1 canal y 1 publicación. Ningún usuario eliminado.
+- Respaldo preventivo: MindEase-back/storage/backups/before_admin_blocks_20260922.sql.
+- No se modificaron claves Stripe ni se realizaron cobros.
+- Prueba administrativa: `node -r ts-node/register tests/admin.integration.js` desde MindEase-back.
 
-`npm run build` compila el panel. Las pruebas de soporte del backend comprueban también el aislamiento de evidencias y notificaciones en un esquema temporal.
+Estas comprobaciones no equivalen a una auditoría completa de seguridad ni cubren todos los flujos de producción.
 
-Los cambios de backend de este bloque no requieren migraciones. Es necesario reconstruir el contenedor local para activar las nuevas reglas de autorización; no se ha hecho automáticamente. El panel se debe servir con `VITE_API_URL` apuntando al backend correcto. No se modificaron claves Stripe ni se realizaron cobros.
+## Pendientes
 
-## Pendientes explícitos
-
-- Panel financiero y endpoints administrativos específicos (pagos, comisiones, custodia, reembolsos y retiros); no se añadieron acciones monetarias manuales.
-- Supervisión administrativa de citas y consultas sin notas clínicas.
-- Administración general de canales/categorías fuera de los reportes, y persistencia real de los catálogos marcados como demostración.
-- Asignación de tickets a un agente distinto del usuario conectado y dashboard de métricas de soporte.
-- Pruebas visuales y extremo a extremo por rol. ESLint aún presenta deuda de tipos y hooks en archivos existentes.
-- Chat privado y Jitsi pertenecen a fase 6 y no forman parte de este bloque del panel.
+- Panel financiero de consulta implementado (ver FINANCE_IMPLEMENTATION.md). Quedan pendientes operaciones monetarias administrativas, conciliación con Stripe y retiros reales mediante Connect.
+- Supervisión de citas y consultas implementada en modo lectura; ver APPOINTMENTS_IMPLEMENTATION.md. No expone notas clínicas ni enlaces de videollamada.
+- Persistencia de los demás catálogos aún marcados como demostración.
+- Deuda existente de ESLint, tipos y hooks; ampliar pruebas visuales y de accesibilidad.
+- Chat privado, Jitsi y estados de consulta de fase 6 quedan fuera de estos tres bloques administrativos.

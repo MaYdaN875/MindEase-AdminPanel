@@ -24,6 +24,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { name: 'Community', id: 'community', icon: 'forum' },
     { name: 'Catalogs', id: 'catalogs', icon: 'library_books' },
     { name: 'Soporte', id: 'support', icon: 'support_agent' },
+    { name: 'Finanzas', id: 'finance', icon: 'account_balance' },
+    { name: 'Citas y consultas', id: 'appointments', icon: 'event' },
     { name: 'Audit Logs', id: 'audit', icon: 'history' },
   ];
 

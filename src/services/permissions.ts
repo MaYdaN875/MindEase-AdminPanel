@@ -6,6 +6,8 @@ export function canAccess(roles: string[], view: string): boolean {
     dossier: ['ADMIN', 'SUPERADMIN', 'REVISOR'],
     users: ['ADMIN', 'SUPERADMIN'],
     audit: ['ADMIN', 'SUPERADMIN'],
+    finance: ['ADMIN', 'SUPERADMIN'],
+    appointments: ['ADMIN', 'SUPERADMIN'],
     catalogs: ['ADMIN', 'SUPERADMIN'],
     moderation: ['ADMIN', 'SUPERADMIN', 'MODERATOR', 'SUPPORT'],
     community: ['ADMIN', 'SUPERADMIN', 'MODERATOR'],

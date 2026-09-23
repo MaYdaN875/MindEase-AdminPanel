@@ -17,6 +17,42 @@ function load(file, dependencies = {}, globals = {}) {
   return module.exports;
 }
 const permissions = load('src/services/permissions.ts');
+test('appointment supervision restricted to administrators', () => {
+  for (const role of ['ADMIN', 'SUPERADMIN', 'SUPPORT', 'REVISOR', 'MODERATOR', 'USER', 'PSYCHOLOGIST_VERIFIED']) assert.equal(permissions.canAccess([role], 'appointments'), ['ADMIN', 'SUPERADMIN'].includes(role));
+});
+test('appointment client preserves independent filters and abort signal', async () => {
+  const calls = [];
+  const client = load('src/services/appointmentAdminService.ts', { './api': { __esModule: true, default: { async get(route, config) { calls.push({ route, config }); return { data: { data: { ok: true } } }; } } } });
+  const controller = new AbortController();
+  await client.listAdminAppointments({ status: 'CONFIRMED', consultationStatus: 'IN_PROGRESS', paymentStatus: 'NONE' }, 2, controller.signal);
+  await client.getAdminAppointment('test-id', controller.signal);
+  assert.equal(calls[0].route, '/admin/appointments');
+  assert.equal(calls[0].config.params.page, 2);
+  assert.equal(calls[0].config.params.consultationStatus, 'IN_PROGRESS');
+  assert.equal(calls[0].config.params.paymentStatus, 'NONE');
+  assert.equal(calls[0].config.signal, controller.signal);
+  assert.equal(calls[1].route, '/admin/appointments/test-id');
+});
+test('finance navigation is restricted to administrators', () => {
+  for (const role of ['ADMIN', 'SUPERADMIN', 'SUPPORT', 'REVISOR', 'MODERATOR', 'USER', 'PSYCHOLOGIST_VERIFIED']) {
+    assert.equal(permissions.canAccess([role], 'finance'), ['ADMIN', 'SUPERADMIN'].includes(role));
+  }
+});
+test('finance client preserves filters, pagination and cancellation; only reads', async () => {
+  const calls = [];
+  const client = load('src/services/financeService.ts', { './api': { __esModule: true, default: { async get(route, config) { calls.push({ route, config }); return { data: { data: { ok: true } } }; } } } });
+  const controller = new AbortController();
+  await client.getFinanceSummary('MXN', controller.signal);
+  await client.getFinanceList('refunds', { currency: 'USD', status: 'REFUNDED', search: 'test' }, 2, controller.signal);
+  await client.getFinancePayment('payment-id', controller.signal);
+  assert.equal(calls[0].route, '/admin/finance/summary');
+  assert.equal(calls[1].route, '/admin/finance/refunds');
+  assert.equal(calls[1].config.params.page, 2);
+  assert.equal(calls[1].config.params.status, 'REFUNDED');
+  assert.equal(calls[1].config.params.currency, 'USD');
+  assert.equal(calls[1].config.signal, controller.signal);
+  assert.equal(calls[2].route, '/admin/finance/payments/payment-id');
+});
 function service(api, globals = {}) {
   return load('src/services/adminService.ts', { './api': { __esModule: true, default: api }, './permissions': permissions }, globals);
 }
@@ -75,17 +111,16 @@ test('patient login cannot persist a panel session', async () => {
 });
 
 test('authorized download is resolved against API origin without exposing login token', async () => {
-  let redirected; let payload;
-  const tab = { opener: {}, location: { replace(value) { redirected = value; } }, close() {} };
+  let preview; let payload;
   const api = { defaults: { baseURL: 'http://localhost:3000/api' }, async post(route, body) {
     assert.equal(route, '/media/access'); payload = body;
     return { data: { data: { url: '/uploads/support/file.png?access=short-lived' } } };
   } };
-  const methods = service(api, { window: { location: { origin: 'http://localhost:5173' }, open() { return tab; } } });
+  const methods = service(api, { CustomEvent, window: { location: { origin: 'http://localhost:5173' }, dispatchEvent(event) { preview = event.detail; } } });
   await methods.openProtectedMedia('/uploads/support/file.png');
   assert.equal(payload.url, '/uploads/support/file.png');
-  assert.equal(redirected, 'http://localhost:3000/uploads/support/file.png?access=short-lived');
-  assert.equal(tab.opener, null);
+  assert.equal(preview.url, 'http://localhost:3000/uploads/support/file.png?access=short-lived');
+  assert.equal(preview.path, '/uploads/support/file.png');
 });
 
 test('external or malicious download origins are rejected', async () => {

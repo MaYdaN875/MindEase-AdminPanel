@@ -35,6 +35,9 @@ import './App.css';
 import { getStaffSession, canAccess, type StaffSession } from './services/adminService';
 import { SupportView } from './views/SupportView';
 import { CommunityAdminView } from './views/CommunityAdminView';
+import { MediaPreview } from './components/MediaPreview';
+import { FinanceView } from './views/FinanceView';
+import { AppointmentAdminView } from './views/AppointmentAdminView';
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
@@ -347,6 +350,10 @@ function App() {
         return <ReportsView roles={staffRoles} onOpenTicket={id => { setSupportTicketId(id); setCurrentView('support'); }} />;
       case 'community':
         return <CommunityAdminView roles={staffRoles} />;
+      case 'finance':
+        return <FinanceView />;
+      case 'appointments':
+        return <AppointmentAdminView />;
       case 'support':
         return <SupportView key={supportTicketId ?? 'inbox'} userId={session!.id} initialTicketId={supportTicketId} />;
       case 'catalogs':
@@ -409,6 +416,7 @@ function App() {
         <main className="flex-1 overflow-y-auto p-4 md:p-gutter max-w-container-max mx-auto w-full">
           {renderActiveView()}
         </main>
+        <MediaPreview />
       </div>
     </div>
   );
