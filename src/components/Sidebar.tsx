@@ -22,6 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { name: 'User Management', id: 'users', icon: 'group' },
     { name: 'Reports & Moderation', id: 'moderation', icon: 'assessment' },
     { name: 'Community', id: 'community', icon: 'forum' },
+    { name: 'Reseñas de consultas', id: 'patient-reviews', icon: 'star' },
     { name: 'Catalogs', id: 'catalogs', icon: 'library_books' },
     { name: 'Soporte', id: 'support', icon: 'support_agent' },
     { name: 'Finanzas', id: 'finance', icon: 'account_balance' },

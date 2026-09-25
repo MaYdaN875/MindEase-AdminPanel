@@ -11,6 +11,7 @@ export function canAccess(roles: string[], view: string): boolean {
     catalogs: ['ADMIN', 'SUPERADMIN'],
     moderation: ['ADMIN', 'SUPERADMIN', 'MODERATOR', 'SUPPORT'],
     community: ['ADMIN', 'SUPERADMIN', 'MODERATOR'],
+    'patient-reviews': ['ADMIN', 'SUPERADMIN', 'MODERATOR'],
     support: ['ADMIN', 'SUPERADMIN', 'SUPPORT'],
     broadcast: ['ADMIN', 'SUPERADMIN'],
   };

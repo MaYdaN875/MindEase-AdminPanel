@@ -35,6 +35,7 @@ import './App.css';
 import { getStaffSession, canAccess, type StaffSession } from './services/adminService';
 import { SupportView } from './views/SupportView';
 import { CommunityAdminView } from './views/CommunityAdminView';
+import { PatientReviewsView } from './views/PatientReviewsView';
 import { MediaPreview } from './components/MediaPreview';
 import { FinanceView } from './views/FinanceView';
 import { AppointmentAdminView } from './views/AppointmentAdminView';
@@ -350,6 +351,8 @@ function App() {
         return <ReportsView roles={staffRoles} onOpenTicket={id => { setSupportTicketId(id); setCurrentView('support'); }} />;
       case 'community':
         return <CommunityAdminView roles={staffRoles} />;
+      case 'patient-reviews':
+        return <PatientReviewsView />;
       case 'finance':
         return <FinanceView />;
       case 'appointments':
