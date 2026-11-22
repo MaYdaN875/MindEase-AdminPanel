@@ -4,8 +4,9 @@ import {
   createAdminSpecialty,
   updateAdminSpecialty,
   deleteAdminSpecialty,
+  getAdminLegalTexts, createAdminLegalText, updateAdminLegalText,
 } from '../services/adminService';
-import type { SpecialtyRecord } from '../services/adminService';
+import type { SpecialtyRecord, LegalTextRecord } from '../services/adminService';
 
 interface CatalogItem {
   id: string;
@@ -25,10 +26,16 @@ export const CatalogsView: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCode, setNewCode] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [newVersion, setNewVersion] = useState('1.0');
+  const [newAudience, setNewAudience] = useState<'ALL' | 'PSYCHOLOGIST'>('ALL');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingItem, setEditingItem] = useState<{ id: string; name: string } | null>(null);
   const [editName, setEditName] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editVersion, setEditVersion] = useState('');
+  const [editAudience, setEditAudience] = useState<'ALL' | 'PSYCHOLOGIST'>('ALL');
   const [isEditing, setIsEditing] = useState(false);
 
   const [loadingSpecialties, setLoadingSpecialties] = useState(false);
@@ -55,14 +62,11 @@ export const CatalogsView: React.FC = () => {
     { id: 'REJ-003', name: 'Falsified Identity Credentials', code: 'SUSP-FRAUD', status: 'Active' },
   ]);
 
-  const [legal, setLegal] = useState<CatalogItem[]>([
-    { id: 'LGL-001', name: 'Terms of Clinical Service v2.1', code: 'TOS-CLIN', status: 'Active' },
-    { id: 'LGL-002', name: 'Privacy Policy & GDPR Consent', code: 'PRIVACY-GDPR', status: 'Active' },
-    { id: 'LGL-003', name: 'Patient Data Protection Act Agreement', code: 'HIPAA-DATA', status: 'Active' },
-  ]);
+  const [legal, setLegal] = useState<LegalTextRecord[]>([]);
 
   useEffect(() => {
     fetchSpecialties();
+    fetchLegalTexts();
   }, []);
 
   const fetchSpecialties = async () => {
@@ -76,6 +80,7 @@ export const CatalogsView: React.FC = () => {
       setLoadingSpecialties(false);
     }
   };
+  const fetchLegalTexts = async () => { try { setLegal(await getAdminLegalTexts()); } catch (err) { console.error('Failed to load legal texts:', err); } };
 
   const mapSpecialtyToCatalogItem = (sp: SpecialtyRecord): CatalogItem => {
     const code = sp.name
@@ -103,7 +108,7 @@ export const CatalogsView: React.FC = () => {
       case 'rejections':
         return rejections;
       case 'legal':
-        return legal;
+        return legal.map(item => ({ id: item.id, name: `${item.title} · v${item.version}`, code: item.code, status: item.isActive ? 'Active' : 'Suspended' }));
     }
   };
 
@@ -137,7 +142,11 @@ export const CatalogsView: React.FC = () => {
     }
   };
 
-  const handleToggleStatus = (id: string) => {
+  const handleToggleStatus = async (id: string) => {
+    if (activeCatalog === 'legal') {
+      const item = legal.find(value => value.id === id); if (!item) return;
+      await updateAdminLegalText(id, { isActive: !item.isActive }); await fetchLegalTexts(); return;
+    }
     const updateStatus = (list: CatalogItem[]): CatalogItem[] =>
       list.map((item) =>
         item.id === id
@@ -157,9 +166,6 @@ export const CatalogsView: React.FC = () => {
         break;
       case 'rejections':
         setRejections((prev) => updateStatus(prev));
-        break;
-      case 'legal':
-        setLegal((prev) => updateStatus(prev));
         break;
     }
   };
@@ -185,6 +191,17 @@ export const CatalogsView: React.FC = () => {
       return;
     }
 
+    if (activeCatalog === 'legal') {
+      if (!newName.trim() || !newCode.trim() || !newContent.trim()) return;
+      setIsSubmitting(true);
+      try {
+        await createAdminLegalText({ title: newName.trim(), code: newCode.trim().toUpperCase().replace(/\s+/g, '_'), content: newContent.trim(), version: newVersion.trim() || '1.0', audience: newAudience, isActive: true });
+        await fetchLegalTexts(); setShowAddModal(false); setNewName(''); setNewCode(''); setNewContent('');
+      } catch (err: any) { alert(err.response?.data?.message || 'Failed to create legal text.'); }
+      finally { setIsSubmitting(false); }
+      return;
+    }
+
     if (newName.trim() && newCode.trim()) {
       const activeList = getActiveList();
       const prefix = activeCatalog.substring(0, 3).toUpperCase();
@@ -207,9 +224,6 @@ export const CatalogsView: React.FC = () => {
         case 'rejections':
           setRejections((prev) => [...prev, newItem]);
           break;
-        case 'legal':
-          setLegal((prev) => [...prev, newItem]);
-          break;
       }
 
       setNewName('');
@@ -225,6 +239,9 @@ export const CatalogsView: React.FC = () => {
         setEditingItem({ id: dbRecord.id, name: dbRecord.name });
         setEditName(dbRecord.name);
       }
+    } else if (activeCatalog === 'legal') {
+      const record = legal.find(value => value.id === item.id);
+      if (record) { setEditingItem({ id: record.id, name: record.title }); setEditName(record.title); setEditContent(record.content); setEditVersion(record.version); setEditAudience(record.audience); }
     } else {
       setEditingItem({ id: item.id, name: item.name });
       setEditName(item.name);
@@ -251,6 +268,14 @@ export const CatalogsView: React.FC = () => {
       return;
     }
 
+    if (activeCatalog === 'legal') {
+      setIsEditing(true);
+      try { await updateAdminLegalText(editingItem.id, { title: editName.trim(), content: editContent.trim(), version: editVersion.trim(), audience: editAudience }); await fetchLegalTexts(); setEditingItem(null); }
+      catch (err: any) { alert(err.response?.data?.message || 'Failed to update legal text.'); }
+      finally { setIsEditing(false); }
+      return;
+    }
+
     // Non-specialty mock edits
     const updateName = (list: CatalogItem[]): CatalogItem[] =>
       list.map((item) => (item.id === editingItem.id ? { ...item, name: editName.trim() } : item));
@@ -264,9 +289,6 @@ export const CatalogsView: React.FC = () => {
         break;
       case 'rejections':
         setRejections((prev) => updateName(prev));
-        break;
-      case 'legal':
-        setLegal((prev) => updateName(prev));
         break;
     }
 
@@ -313,7 +335,7 @@ export const CatalogsView: React.FC = () => {
 
   return (
     <div className="space-y-stack-lg animate-fade-in text-left">
-      {activeCatalog !== 'specialties' && <p role="status" className="p-3 bg-amber-50 border rounded">Catálogo de demostración: no conectado al backend. Edición deshabilitada.</p>}
+      {activeCatalog !== 'specialties' && activeCatalog !== 'legal' && <p role="status" className="p-3 bg-amber-50 border rounded">Catálogo de demostración: no conectado al backend. Edición deshabilitada.</p>}
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -325,7 +347,7 @@ export const CatalogsView: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {activeCatalog === 'specialties' && (
+          {(activeCatalog === 'specialties' || activeCatalog === 'legal') && (
             <button
               onClick={fetchSpecialties}
               className="p-2 border border-outline-variant/60 rounded-lg hover:bg-surface-variant text-primary transition-colors"
@@ -337,7 +359,7 @@ export const CatalogsView: React.FC = () => {
             </button>
           )}
           <button
-            disabled={activeCatalog !== 'specialties'}
+            disabled={activeCatalog !== 'specialties' && activeCatalog !== 'legal'}
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary font-body-md text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
           >
@@ -384,6 +406,7 @@ export const CatalogsView: React.FC = () => {
                   name: 'Legal Texts',
                   icon: 'gavel',
                   count: legal.length,
+                  live: true,
                 },
               ].map((cat) => (
                 <button
@@ -563,7 +586,7 @@ export const CatalogsView: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5 md:opacity-0 group-hover:opacity-100 transition-opacity">
                           {/* Edit Button */}
                           <button
-                            disabled={activeCatalog !== 'specialties'}
+                            disabled={activeCatalog !== 'specialties' && activeCatalog !== 'legal'}
                             onClick={() => handleOpenEdit(item)}
                             className="p-1.5 text-outline hover:text-primary transition-colors rounded hover:bg-surface-container-high"
                             title="Edit Taxonomy Name"
@@ -582,7 +605,7 @@ export const CatalogsView: React.FC = () => {
                             </button>
                           ) : (
                             <button
-                              disabled
+                              disabled={activeCatalog !== 'legal'}
                               onClick={() => handleToggleStatus(item.id)}
                               className="p-1.5 text-outline hover:text-error transition-colors rounded hover:bg-error-container/50"
                               title={item.status === 'Active' ? 'Suspend Entry' : 'Activate Entry'}
@@ -666,6 +689,12 @@ export const CatalogsView: React.FC = () => {
                 </div>
               )}
 
+              {activeCatalog === 'legal' && <>
+                <div className="flex flex-col gap-1.5"><label className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Versión</label><input value={newVersion} onChange={(e) => setNewVersion(e.target.value)} required className="p-2.5 border border-outline-variant rounded bg-surface-container-low text-xs" /></div>
+                <div className="flex flex-col gap-1.5"><label className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Aplica a</label><select value={newAudience} onChange={(e) => setNewAudience(e.target.value as 'ALL' | 'PSYCHOLOGIST')} className="p-2.5 border border-outline-variant rounded bg-surface-container-low text-xs"><option value="ALL">Todas las cuentas</option><option value="PSYCHOLOGIST">Sólo profesionales</option></select></div>
+                <div className="flex flex-col gap-1.5"><label className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Contenido</label><textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} required minLength={30} rows={9} className="p-2.5 border border-outline-variant rounded bg-surface-container-low text-xs" /></div>
+              </>}
+
               <div className="flex justify-end gap-2 pt-2 text-xs font-semibold">
                 <button
                   type="button"
@@ -716,6 +745,12 @@ export const CatalogsView: React.FC = () => {
                   className="p-2.5 border border-outline-variant rounded bg-surface-container-low focus:ring-1 focus:ring-secondary focus:border-secondary outline-none text-xs"
                 />
               </div>
+
+              {activeCatalog === 'legal' && <>
+                <div className="flex flex-col gap-1.5"><label className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Nueva versión</label><input value={editVersion} onChange={(e) => setEditVersion(e.target.value)} required className="p-2.5 border border-outline-variant rounded bg-surface-container-low text-xs" /></div>
+                <div className="flex flex-col gap-1.5"><label className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Aplica a</label><select value={editAudience} onChange={(e) => setEditAudience(e.target.value as 'ALL' | 'PSYCHOLOGIST')} className="p-2.5 border border-outline-variant rounded bg-surface-container-low text-xs"><option value="ALL">Todas las cuentas</option><option value="PSYCHOLOGIST">Sólo profesionales</option></select></div>
+                <div className="flex flex-col gap-1.5"><label className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Contenido</label><textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} required minLength={30} rows={10} className="p-2.5 border border-outline-variant rounded bg-surface-container-low text-xs" /></div>
+              </>}
 
               <div className="flex justify-end gap-2 pt-2 text-xs font-semibold">
                 <button

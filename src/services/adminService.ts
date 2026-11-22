@@ -297,6 +297,14 @@ export const deleteAdminSpecialty = async (specialtyId: string): Promise<void> =
   await api.delete(`/admin/specialties/${specialtyId}`);
 };
 
+export interface LegalTextRecord {
+  id: string; code: string; title: string; content: string; version: string;
+  audience: 'ALL' | 'PSYCHOLOGIST'; isActive: boolean; updatedAt: string;
+}
+export const getAdminLegalTexts = async (): Promise<LegalTextRecord[]> => (await api.get('/admin/legal-texts')).data.data.texts;
+export const createAdminLegalText = async (payload: Omit<LegalTextRecord, 'id' | 'updatedAt'>): Promise<LegalTextRecord> => (await api.post('/admin/legal-texts', payload)).data.data.text;
+export const updateAdminLegalText = async (id: string, payload: Partial<Omit<LegalTextRecord, 'id' | 'code' | 'updatedAt'>>): Promise<LegalTextRecord> => (await api.put(`/admin/legal-texts/${id}`, payload)).data.data.text;
+
 // ----------------------------------------------------
 // Dashboard & Analytics APIs (Punto 3)
 // ----------------------------------------------------
